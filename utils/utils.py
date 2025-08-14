@@ -17,7 +17,7 @@ def IoU(pred, target):
     union = np.logical_or(pred, target).sum()
 
     if union == 0:
-        return 1.0 if intersection == 0 else 0.0  # 若沒有前景，IoU 為 1，否則為 0
+        return 1.0 if intersection == 0 else 0.0
 
     return intersection / union
 

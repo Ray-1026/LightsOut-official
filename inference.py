@@ -14,7 +14,7 @@ from src.pipelines.pipeline_stable_diffusion_outpaint import OutpaintPipeline
 from src.pipelines.pipeline_controlnet_outpaint import ControlNetOutpaintPipeline
 from src.schedulers.scheduling_pndm import CustomScheduler
 from src.models.unet import U_Net
-from src.models.light_regress_model import LightRegressModel
+from src.models.light_source_regressor import LightSourceRegressor
 from utils.dataset import TestImageLoader
 from utils.utils import IoU, mean_IoU
 
@@ -30,17 +30,17 @@ def parse_args():
     parser.add_argument(
         "--light_regress_path",
         type=str,
-        default="pretrained/light_regress/model_61_0.63.pth",
+        default="pretrained/light_regress/model.pth",
         help="Path to pretrained light regress model.",
     )
     parser.add_argument(
-        "--controlnet_path",
+        "--light_control_path",
         type=str,
-        default="pretrained/controlnet",
+        default="pretrained/light_control",
         help="Path to pretrained controlnet model or model identifier from huggingface.co/models.",
     )
     parser.add_argument(
-        "--lora_path",
+        "--light_outpaint_path",
         type=str,
         default="pretrained/lora_sd",
         help="Path to lora model.",
@@ -50,12 +50,6 @@ def parse_args():
         type=str,
         default="Salesforce/blip2-opt-2.7b",
         help="Path to pretrained blip2 model or model identifier from huggingface.co/models.",
-    )
-    parser.add_argument(
-        "--blip2_proc_path",
-        type=str,
-        default="Salesforce/blip2-opt-2.7b",
-        help="Path to pretrained blip2 processor or processor identifier from huggingface.co/models.",
     )
     parser.add_argument(
         "--output_dir",
@@ -111,8 +105,9 @@ def parse_args():
     return args
 
 
-def LRMInit(light_regress_model, device="cuda"):
-    model = LightRegressModel()
+def LSRMInit(light_regress_model, device="cuda"):
+    """light source regression module"""
+    model = LightSourceRegressor()
     ckpt = torch.load(light_regress_model)
     model.load_state_dict(ckpt["model"])
     model.to(device)
@@ -145,8 +140,8 @@ def OutpainterInit(
     return pipe
 
 
-def Blip2Init(blip2_path, blip2_proc_path, device="cuda", torch_dtype=torch.float16):
-    processor = AutoProcessor.from_pretrained(blip2_proc_path)
+def Blip2Init(blip2_path, device="cuda", torch_dtype=torch.float16):
+    processor = AutoProcessor.from_pretrained(blip2_path)
     blip2 = Blip2ForConditionalGeneration.from_pretrained(
         blip2_path, torch_dtype=torch_dtype
     )
@@ -184,18 +179,17 @@ def blend_with_alpha(result, input_img, box, blur_size=31):
     return blended
 
 
-if __name__ == "__main__":
-    args = parse_args()
+def main(args):
     os.makedirs(args.output_dir, exist_ok=True)
 
     # lightsource regress model
-    LightRegressModel = LRMInit(args.light_regress_path)
+    lsr_module = LSRMInit(args.light_regress_path)
 
     # sd outpaint
-    pipe = OutpainterInit(args.sd_path, args.controlnet_path, args.lora_path)
+    pipe = OutpainterInit(args.sd_path, args.controlnet_path, args.light_outpaint_path)
 
     # blip2
-    processor, blip2 = Blip2Init(args.blip2_path, args.blip2_proc_path)
+    processor, blip2 = Blip2Init(args.blip2_path)
 
     # dataset
     with open(args.dataset_config, "r") as stream:
@@ -230,7 +224,7 @@ if __name__ == "__main__":
             input_img = transform(input_img).unsqueeze(0).to("cuda")
             control_img = transform(control_img).unsqueeze(0)
 
-            pred_mask = LightRegressModel.forward_render(input_img)
+            pred_mask = lsr_module.forward_render(input_img)
 
             pred_mask = (pred_mask > threshold).float()
 
@@ -257,7 +251,7 @@ if __name__ == "__main__":
 
         if args.additional_prompt == None:
             generated_text += (
-                "dynamic lighting, intense light source, prominent lens flare, best quality, high resolution, masterpiece, intricate details"
+                ", dynamic lighting, intense light source, prominent lens flare, best quality, high resolution, masterpiece, intricate details"
                 # ", full light sources with lens flare, best quality, high resolution"
             )
         else:
@@ -269,7 +263,7 @@ if __name__ == "__main__":
         # denoise
         result = pipe(
             prompt=generated_text,
-            negative_prompt="NSFW, (word:1.5), watermark, blurry, missing body, amputation, mutilation",
+            # negative_prompt="NSFW, (word:1.5), watermark, blurry, missing body, amputation, mutilation",
             image=data["input_img_matching"],
             mask_image=data["mask_img"],
             control_image=(
@@ -296,3 +290,8 @@ if __name__ == "__main__":
 
         result = Image.fromarray(result.astype(np.uint8))
         result.save(f"{args.output_dir}/{output_name}")
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    main(args)

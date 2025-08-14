@@ -5,9 +5,9 @@ from torchvision.models import resnet34, resnet50
 import torchvision.models.vision_transformer as vit
 
 
-class LightRegressModel(nn.Module):
-    def __init__(self, num_lights=4, alpha=2.0, beta=8.0):
-        super(LightRegressModel, self).__init__()
+class LightSourceRegressor(nn.Module):
+    def __init__(self, num_lights=4, alpha=2.0, beta=8.0, **kwargs):
+        super(LightSourceRegressor, self).__init__()
 
         self.num_lights = num_lights
         self.alpha = alpha
@@ -15,9 +15,8 @@ class LightRegressModel(nn.Module):
 
         self.model = resnet34(pretrained=True)
         # self.model = resnet50(pretrained=True)
-        self.init_resnet()
-
         # self.model = vit.vit_b_16(pretrained=True)
+        self.init_resnet()
         # self.init_vit()
 
         self.xyr_mlp = nn.Sequential(
@@ -25,7 +24,7 @@ class LightRegressModel(nn.Module):
         )
         self.p_mlp = nn.Sequential(
             nn.Linear(self.last_dim, self.num_lights),
-            nn.Sigmoid(),
+            nn.Sigmoid(),  # ensure p is in [0, 1]
         )
 
     def init_resnet(self):
@@ -45,7 +44,7 @@ class LightRegressModel(nn.Module):
             )
             old_pos_embed = old_pos_embed.permute(0, 2, 1)
 
-            # 設定新的 positional embedding
+            # new positional embedding
             self.model.encoder.pos_embedding = nn.Parameter(
                 torch.cat(
                     [self.model.encoder.pos_embedding[:, :1], old_pos_embed], dim=1
@@ -59,16 +58,6 @@ class LightRegressModel(nn.Module):
         self.last_dim = self.model.hidden_dim
         self.model.heads.head = nn.Identity()
 
-    # def render(self, canvas_width, canvas_height, shapes, shape_groups, samples=2):
-    #     _render = pydiffvg.RenderFunction.apply
-    #     scene_args = pydiffvg.RenderFunction.serialize_scene(
-    #         canvas_width, canvas_height, shapes, shape_groups
-    #     )
-    #     img = _render(
-    #         canvas_width, canvas_height, samples, samples, 0, None, *scene_args
-    #     )
-    #     return img
-
     def forward(self, x, height=512, width=512, smoothness=0.1, merge=False):
         _x = self.model(x)  # [B, last_dim]
 
@@ -81,52 +70,6 @@ class LightRegressModel(nn.Module):
         output = torch.cat([_xyr, _p.unsqueeze(-1)], dim=-1)
 
         return output
-
-    # def forward_render(self, x, height=512, width=512):
-    #     _x = self.forward(x)
-
-    #     _xy = _x[:, :, :2]
-    #     _r = _x[:, :, 2]
-    #     _p = _x[:, :, 3]
-
-    #     masks = None
-    #     for b in range(_x.size(0)):
-    #         # xy, r = _x[b, :, :2], _x[b, :, 2]
-
-    #         shapes, shape_groups = [], []
-    #         n = 0
-    #         for i in range(self.num_lights):
-    #             if _r[b, i] < 0 or _r[b, i] > 1 or _p[b, i] < 0.5:
-    #                 continue
-
-    #             # diffvg
-    #             shapes += [
-    #                 pydiffvg.Circle(radius=_r[b, i] * height, center=_xy[b, i] * width)
-    #             ]
-    #             # print(shapes[-1].radius, shapes[-1].center)
-    #             shape_groups += [
-    #                 pydiffvg.ShapeGroup(
-    #                     shape_ids=torch.tensor([n]),
-    #                     fill_color=torch.tensor(
-    #                         [1.0, 1.0, 1.0, 1.0], requires_grad=False
-    #                     ),
-    #                 )
-    #             ]
-    #             n += 1
-
-    #         if len(shapes) == 0:
-    #             img = torch.zeros(height, width, 4, device=x.device)
-    #         else:
-    #             img = self.render(width, height, shapes, shape_groups, samples=2)
-
-    #         img = img.permute(2, 0, 1).view(4, height, width)[:3].mean(0, keepdim=True)
-    #         img = img.unsqueeze(0)  # [1, 1, H, W]
-
-    #         masks = (
-    #             img if masks is None else torch.cat([masks, img], dim=0)
-    #         )  # [B, 1, H, W]
-
-    #     return masks  # [B, 1, H, W]
 
     def forward_render(self, x, height=512, width=512, smoothness=0.1, merge=False):
         _x = self.forward(x)
@@ -175,7 +118,7 @@ class LightRegressModel(nn.Module):
 
 if __name__ == "__main__":
     # pydiffvg.set_use_gpu(torch.cuda.is_available())
-    model = LightRegressModel(num_lights=4).cuda()
+    model = LightSourceRegressor(num_lights=4).cuda()
     x = torch.randn(8, 3, 512, 512, device="cuda")
     y = model.forward_render(x)
     print(y.shape)

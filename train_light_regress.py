@@ -11,19 +11,19 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
 from src.models.unet import U_Net
-from src.models.light_regress_model import LightRegressModel
+from src.models.light_source_regressor import LightSourceRegressor
 from utils.dataset import (
     Lightsource_Regress_Loader,
     Lightsource_3Maps_Loader,
     TestImageLoader,
 )
 from utils.loss import uncertainty_light_pos_loss, unet_3maps_loss
-from utils.utils import IoU, mean_IoU
+from utils.utils import IoU, mean_IoU, extract_peaks, pick_radius, draw_mask
 
 
 model_dict = {
     "unet": U_Net,
-    "light_regress": LightRegressModel,  # this is the method in the paper
+    "light_regress": LightSourceRegressor,  # this is the method in the paper
     "unet_3maps": U_Net,  # modified after submitted, more stable version
 }
 
@@ -133,7 +133,9 @@ class Trainer:
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.model = model_dict[self.opt.model]().to(self.device)
+        self.model = model_dict[self.opt.model](
+            output_ch=2 if self.opt.model == "unet_3maps" else 1
+        ).to(self.device)
 
         if self.opt.model == "light_regress":
             self.criterion = uncertainty_light_pos_loss()
@@ -142,7 +144,7 @@ class Trainer:
         else:
             self.criterion = torch.nn.MSELoss()
 
-        self.optimizer = torch.optim.Adam(
+        self.optimizer = torch.optim.AdamW(
             list(self.model.parameters()) + list(self.criterion.parameters()),
             lr=self.opt.lr,
         )
@@ -223,15 +225,15 @@ class Trainer:
                     pred_mask = pred_mask.cpu().numpy()
                 else:
                     pred_prob, pred_rad = pred_mask[:, 0:1], pred_mask[:, 1:]
-                    centers = self.extract_peaks(
+                    centers = extract_peaks(
                         pred_prob[0, 0]
                     )  # shape: pred_prob[0, 0] = (H, W)
 
                     if len(centers) == 0:
                         pred_mask = np.zeros_like(control_img[0, 0])
                     else:
-                        radii = self.pick_radius(pred_rad[0, 0], centers)
-                        pred_mask = self.draw_mask(centers, radii, 512, 512)
+                        radii = pick_radius(pred_rad[0, 0], centers)
+                        pred_mask = draw_mask(centers, radii, 512, 512)
 
                 control_img = (control_img.numpy() + 1) / 2
 

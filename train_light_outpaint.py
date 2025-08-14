@@ -373,20 +373,19 @@ def parse_args():
         required=True,
         help="The prompt with identifier specifying the instance",
     )
+    parser.add_argument(
+        "--blip2_model_path",
+        type=str,
+        default="Salesforce/blip2-opt-2.7b",
+        help="Path to pretrained blip2 model or model identifier from huggingface.co/models.",
+    )
 
     args = parser.parse_args()
     env_local_rank = int(os.environ.get("LOCAL_RANK", -1))
     if env_local_rank != -1 and env_local_rank != args.local_rank:
         args.local_rank = env_local_rank
 
-    # Sanity checks
-    if args.dataset_name is None and args.train_data_dir is None:
-        raise ValueError("Need either a dataset name or a training folder.")
-
     return args
-
-
-DATASET_NAME_MAPPING = {}
 
 
 def main():
@@ -460,9 +459,9 @@ def main():
     vae.requires_grad_(False)
     text_encoder.requires_grad_(False)
 
-    processor = AutoProcessor.from_pretrained("./pretrained/blip2/blip_processor")
+    processor = AutoProcessor.from_pretrained(args.blip2_model_path)
     blip2 = Blip2ForConditionalGeneration.from_pretrained(
-        "./pretrained/blip2/blip2", torch_dtype=torch.float16
+        args.blip2_model_path, torch_dtype=torch.float16
     )
 
     # For mixed precision training we cast all non-trainable weigths (vae, non-lora text_encoder and non-lora unet) to half-precision
@@ -591,7 +590,7 @@ def main():
     )
 
     # Get the datasets
-    with open("configs/flare7kpp_dataset.yml", "r") as stream:
+    with open(args.dataset_config_name, "r") as stream:
         config = yaml.safe_load(stream)
 
     dataset = Flare7kpp_Pair_Loader(
@@ -770,7 +769,7 @@ def main():
                 )
 
                 generated_text = [
-                    text.replace("\n", "") + ", complete light source with flare"
+                    text.replace("\n", "") + args.instance_prompt
                     for text in generated_text
                 ]
                 text_prompts = tokenize_prompt(generated_text).to(text_encoder.device)

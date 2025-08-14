@@ -632,6 +632,12 @@ def parse_args(input_args=None):
         required=True,
         help="The prompt with identifier specifying the instance",
     )
+    parser.add_argument(
+        "--blip2_model_path",
+        type=str,
+        default="Salesforce/blip2-opt-2.7b",
+        help="Path to pretrained blip2 model or model identifier from huggingface.co/models.",
+    )
 
     if input_args is not None:
         args = parser.parse_args(input_args)
@@ -902,7 +908,7 @@ def main(args):
         )
         return inputs.input_ids
 
-    with open("configs/flare7kpp_dataset.yml", "r") as stream:
+    with open(args.dataset_config_name, "r") as stream:
         config = yaml.safe_load(stream)
 
     train_dataset = Flare7kpp_Pair_Loader(
