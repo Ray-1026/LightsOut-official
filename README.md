@@ -129,7 +129,7 @@ All components of the pipeline are trained separately:
   Alternatively, you can use the provided script:
 
   ```bash
-  bash scripts/light_cond.sh
+  bash scripts/light_control.sh
   ```
 
 3. **Train the Light Source Outpainter**
@@ -159,7 +159,7 @@ All components of the pipeline are trained separately:
   Alternatively, you can use the provided script:
 
   ```bash
-  bash scripts/lora_outpaint.sh
+  bash scripts/light_outpaint.sh
   ```
 
 ## Citation
