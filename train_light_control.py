@@ -42,7 +42,7 @@ from tqdm.auto import tqdm
 from transformers import (
     AutoTokenizer,
     PretrainedConfig,
-    AutoProcessor,
+    Blip2Processor,
     Blip2ForConditionalGeneration,
 )
 from diffusers import (
@@ -782,9 +782,9 @@ def main(args):
         args.pretrained_model_name_or_path, subfolder="unet", revision=args.revision
     )
 
-    processor = AutoProcessor.from_pretrained("./pretrained/blip2/blip_processor")
+    processor = Blip2Processor.from_pretrained(args.blip2_model_path, revision="51572668da0eb669e01a189dc22abe6088589a24")
     blip2 = Blip2ForConditionalGeneration.from_pretrained(
-        "./pretrained/blip2/blip2", torch_dtype=torch.float16
+        args.blip2_model_path, torch_dtype=torch.float16, revision="51572668da0eb669e01a189dc22abe6088589a24"
     )
 
     if args.controlnet_model_name_or_path:

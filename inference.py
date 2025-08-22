@@ -8,7 +8,7 @@ import torchvision
 from PIL import Image, ImageFilter
 from tqdm import tqdm
 from diffusers import ControlNetModel, DPMSolverMultistepScheduler
-from transformers import AutoProcessor, Blip2ForConditionalGeneration
+from transformers import Blip2Processor, Blip2ForConditionalGeneration
 
 from src.pipelines.pipeline_stable_diffusion_outpaint import OutpaintPipeline
 from src.pipelines.pipeline_controlnet_outpaint import ControlNetOutpaintPipeline
@@ -16,7 +16,15 @@ from src.schedulers.scheduling_pndm import CustomScheduler
 from src.models.unet import U_Net
 from src.models.light_source_regressor import LightSourceRegressor
 from utils.dataset import TestImageLoader
-from utils.utils import IoU, mean_IoU
+from utils.utils import (
+    blend_with_alpha,
+    load_mfdnet_checkpoint,
+    predict_flare_from_6_channel,
+    predict_flare_from_3_channel,
+    blend_light_source,
+)
+from SIFR_models.flare7kpp.model import Uformer
+from SIFR_models.mfdnet.model import Model
 
 
 def parse_args():
@@ -42,7 +50,7 @@ def parse_args():
     parser.add_argument(
         "--light_outpaint_path",
         type=str,
-        default="pretrained/lora_sd",
+        default="pretrained/light_outpaint_lora",
         help="Path to lora model.",
     )
     parser.add_argument(
@@ -94,7 +102,28 @@ def parse_args():
         help="Additional prompt for the model.",
     )
 
+    # flare removal
+    parser.add_argument(
+        "--remove_flare", action="store_true", help="Remove flare from images."
+    )
+    parser.add_argument(
+        "--SIFR_model",
+        type=str,
+        choices=["flare7k++", "mfdnet"],
+        default=None,
+        help="Select the SIFR model to use.",
+    )
+    parser.add_argument(
+        "--SIFR_model_path", type=str, default=None, help="Path to the SIFR model."
+    )
+
     args = parser.parse_args()
+
+    if args.remove_flare:
+        if args.SIFR_model is None or args.SIFR_model_path is None:
+            raise ValueError(
+                "SIFR model and model path must be specified when removing flare."
+            )
 
     # set margin
     if args.light_setting == "incomplete":
@@ -141,42 +170,24 @@ def OutpainterInit(
 
 
 def Blip2Init(blip2_path, device="cuda", torch_dtype=torch.float16):
-    processor = AutoProcessor.from_pretrained(blip2_path)
+    processor = Blip2Processor.from_pretrained(blip2_path, revision="51572668da0eb669e01a189dc22abe6088589a24")
     blip2 = Blip2ForConditionalGeneration.from_pretrained(
-        blip2_path, torch_dtype=torch_dtype
+        blip2_path, torch_dtype=torch_dtype, revision="51572668da0eb669e01a189dc22abe6088589a24"
     )
     blip2 = blip2.to(device)
     return processor, blip2
 
+def build_SIFR_model(SIFR_model, SIFR_model_path, device="cuda"):
+    if SIFR_model == "flare7k++":
+        model = Uformer(img_size=512, img_ch=3, output_ch=6).to(device)
+        model.load_state_dict(torch.load(SIFR_model_path))
+    elif SIFR_model == "mfdnet":
+        model = Model().to(device)
+        load_mfdnet_checkpoint(model, SIFR_model_path)
 
-def blend_with_alpha(result, input_img, box, blur_size=31):
-    """
-    Apply alpha blending to paste the specified box region from input_img onto the result image
-    to reduce boundary artifacts and make the blending more natural.
+    model.eval()
 
-    Args:
-        result (np.array): inpainting generated image
-        input_img (np.array): original image
-        box (tuple): (x_min, x_max, y_min, y_max) representing the paste-back region from the original image
-        blur_size (int): blur range for the mask, larger values create smoother transitions (recommended 15~50)
-
-    Returns:
-        np.array: image after alpha blending
-    """
-
-    x_min, x_max, y_min, y_max = box
-
-    # alpha mask
-    mask = np.zeros_like(result, dtype=np.float32)
-    mask[y_min : y_max + 1, x_min : x_max + 1] = 1.0
-
-    # gaussian blur
-    mask = cv2.GaussianBlur(mask, (blur_size, blur_size), 0)
-
-    # alpha blending
-    blended = (mask * input_img + (1 - mask) * result).astype(np.uint8)
-
-    return blended
+    return model
 
 
 def main(args):
@@ -186,7 +197,7 @@ def main(args):
     lsr_module = LSRMInit(args.light_regress_path)
 
     # sd outpaint
-    pipe = OutpainterInit(args.sd_path, args.controlnet_path, args.light_outpaint_path)
+    pipe = OutpainterInit(args.sd_path, args.light_control_path, args.light_outpaint_path)
 
     # blip2
     processor, blip2 = Blip2Init(args.blip2_path)
@@ -214,6 +225,8 @@ def main(args):
     )
 
     threshold = 0.5
+    result_paths = []
+    result_boxes = []
     # iou_scores = []
 
     for data in tqdm(dataset):
@@ -267,7 +280,7 @@ def main(args):
             image=data["input_img_matching"],
             mask_image=data["mask_img"],
             control_image=(
-                data["control_img"] if args.controlnet_path is not None else None
+                data["control_img"] if args.light_control_path is not None else None
             ),
             num_inference_steps=args.step,
             guidance_scale=args.cfg_scale,
@@ -290,6 +303,56 @@ def main(args):
 
         result = Image.fromarray(result.astype(np.uint8))
         result.save(f"{args.output_dir}/{output_name}")
+
+        result_paths.append(f"{args.output_dir}/{output_name}")
+        result_boxes.append(box)
+
+    if args.remove_flare:
+        deflare_path = f"{args.output_dir}/deflare_res"
+        crop_path = f"{args.output_dir}/deflare_crop"
+        os.makedirs(deflare_path, exist_ok=True)
+        os.makedirs(crop_path, exist_ok=True)
+
+        sifr_model = build_SIFR_model(args.SIFR_model, args.SIFR_model_path)
+
+        sifr_transform = torchvision.transforms.Compose(
+            [
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Resize((512, 512)),
+            ]
+        )
+
+        for p, box in tqdm(zip(result_paths, result_boxes)):
+            img = Image.open(p).convert("RGB")
+            img = sifr_transform(img).unsqueeze(0).cuda()
+
+            with torch.no_grad():
+                output_img = sifr_model(img)
+
+                gamma = torch.Tensor([2.2])
+
+                if args.SIFR_model == "flare7k++":
+                    deflare_img, _, _ = predict_flare_from_6_channel(output_img, gamma)
+                    torchvision.utils.save_image(
+                        deflare_img, f"{deflare_path}/{os.path.basename(p)}"
+                    )
+                elif args.SIFR_model == "mfdnet":
+                    flare_mask = torch.zeros_like(img)
+                    deflare_img, _ = predict_flare_from_3_channel(
+                        output_img, flare_mask, output_img, img, img, gamma
+                    )
+                    deflare_img = blend_light_source(img, deflare_img, 0.999)
+                    torchvision.utils.save_image(
+                        deflare_img, f"{deflare_path}/{os.path.basename(p)}"
+                    )
+
+            crop_img = deflare_img.cpu().squeeze(0).permute(1, 2, 0).numpy()
+            crop_img = np.clip(crop_img, 0.0, 1.0)
+            crop_img = (crop_img * 255).astype(np.uint8)
+            crop_img = crop_img[box[2] : box[3] + 1, box[0] : box[1] + 1, :]
+            Image.fromarray(crop_img).resize((512, 512), Image.LANCZOS).save(
+                f"{crop_path}/{os.path.basename(p)}"
+            )
 
 
 if __name__ == "__main__":

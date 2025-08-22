@@ -43,7 +43,7 @@ from tqdm.auto import tqdm
 from transformers import (
     CLIPTextModel,
     CLIPTokenizer,
-    AutoProcessor,
+    Blip2Processor,
     Blip2ForConditionalGeneration,
 )
 from diffusers import (
@@ -459,9 +459,9 @@ def main():
     vae.requires_grad_(False)
     text_encoder.requires_grad_(False)
 
-    processor = AutoProcessor.from_pretrained(args.blip2_model_path)
+    processor = Blip2Processor.from_pretrained(args.blip2_model_path, revision="51572668da0eb669e01a189dc22abe6088589a24")
     blip2 = Blip2ForConditionalGeneration.from_pretrained(
-        args.blip2_model_path, torch_dtype=torch.float16
+        args.blip2_model_path, torch_dtype=torch.float16, revision="51572668da0eb669e01a189dc22abe6088589a24"
     )
 
     # For mixed precision training we cast all non-trainable weigths (vae, non-lora text_encoder and non-lora unet) to half-precision

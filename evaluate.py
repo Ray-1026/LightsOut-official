@@ -168,9 +168,9 @@ def calculate_metrics(args):
             Image.fromarray(img_input).resize((size, size), Image.LANCZOS)
         )
 
-        if name != "baseline":  # only save cropped images for non-baseline methods
-            os.makedirs(args["crop"], exist_ok=True)
-            Image.fromarray(img_input).save(f"{args["crop"]}/{i:06d}.png")
+        # if name != "baseline":  # only save cropped images for non-baseline methods
+        #     os.makedirs(args["crop"], exist_ok=True)
+        #     Image.fromarray(img_input).save(f"{args["crop"]}/{i:06d}.png")
 
         ssim += [compare_ssim(img_gt, img_input, multichannel=True, channel_axis=2)]
         psnr += [compare_psnr(img_gt, img_input, data_range=255)]

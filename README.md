@@ -1,3 +1,5 @@
+<img src="https://ray-1026.github.io/lightsout/static/images/favicon_new.svg" height="150px" align="right">
+
 # LightsOut: Diffusion-based Outpainting for Enhanced Lens Flare Removal
 
 [Shr-Ruei Tsai](), [Wei-Cheng Chang](), [Jie-Ying Lee](https://jayinnn.dev/), [Chih-Hai Su](https://su-terry.github.io/), [Yu-Lun Liu](https://yulunalexliu.github.io/)
@@ -42,7 +44,7 @@ All components of the pipeline are trained separately:
 
 2. **Train the Light Source Condition Module**
   ```bash
-  export MODEL_DIR="stabilityai/stable-diffusion-2-1-base"  # Use "stable-diffusion-v1-5/stable-diffusion-v1-5" for SD 1.5 inpainting or "stabilityai/stable-diffusion-2-1-base" for SD 2.0 inpainting
+  export MODEL_DIR="stabilityai/stable-diffusion-2-1-base"
   export OUTPUT_DIR="/path/to/save/light_control"  # Change this to your desired path
 
   accelerate launch train_light_control.py \
@@ -71,8 +73,8 @@ All components of the pipeline are trained separately:
 
 3. **Train the Light Source Outpainter**
   ```bash
-  export MODEL_DIR="stabilityai/stable-diffusion-2-inpainting" # You can choose "stable-diffusion-v1-5/stable-diffusion-inpainting" or "stabilityai/stable-diffusion-2-inpainting"
-  export OUTPUT_DIR="/path/to/save/light_outpaint"  # Change this to your desired path
+  export MODEL_DIR="stabilityai/stable-diffusion-2-inpainting"
+  export OUTPUT_DIR="/path/to/save/light_outpaint_lora"  # Change this to your desired path
 
   accelerate launch --num_processes 1 train_light_outpaint.py \
     --pretrained_model_name_or_path=$MODEL_DIR \
@@ -100,36 +102,72 @@ All components of the pipeline are trained separately:
   ```
 
 ## Inference
-You can directly use the inference scripts provided in the `scripts/` folder (modify the options as needed):
+Our inference script also provides the option to remove flare. You can go to the repositories [Flare7K](https://github.com/ykdai/Flare7K) or [MFDNet](https://github.com/Jiang-maomao/flare-removal) to download the pretrained models. Then, you can add the following arguments to the inference script:
+
+```bash
+--remove_flare \
+--SIFR_model flare7k++ \
+--SIFR_model_path /path/to/the/SIFR/model/pretrained/weights
+```
+
+Alternatively, you can directly use the provided script in the `scripts/` folder. Just modify the options within the script as needed:
 ```bash
 bash scripts/inference.sh
 ```
 
 ## Evaluation
-After running inference on the Flare7k++ test set, a folder will be generated containing the outpainted images. You can then use the repositories [Zhou et al.](https://github.com/YuyanZhou1/Improving-Lens-Flare-Removal), [Flare7K](https://github.com/ykdai/Flare7K) or [MFDNet](https://github.com/Jiang-maomao/flare-removal) to remove lens flare from the outpainted images. Finally, evaluate your results using the provided evaluation script:
+After running inference on the Flare7k++ test set, a folder will be generated containing the outpainted images. The structure of the folder will look like this:
+
+```
+/path/to/your/output/dir
+|── deflare_crop/ # Cropped images with flare removed
+|   ├── xxx.png
+|   └── ...
+|
+|── deflare_res/ # Full images with flare removed (for evaluation)
+|   ├── xxx.png
+|   └── ...
+|
+|── xxx.png
+|── ...
+```
+
+Evaluate your results using the provided evaluation script:
 
 ```bash
 python evaluate.py \
-    --input /path/to/your/flare/removal/results \
+    --input /path/to/your/flare/removal/results/in/`deflare_res` \
     --gt /path/to/flare7kpp/test/gt \
     --mask /path/to/flare7kpp/test/mask \
-    --crop /path/to/save/cropped/images \
     --crop_margin 0 # 0 => no light source, 15 => incomplete light source
 ```
 
 ## Inference on Custom Data
 To run inference on your own images, you can use the `inference_custom.py` script.
 
+```bash
+python inference.py \
+    --light_outpaint_path /path/to/your/light/outpaint/weights \
+    --light_control_path /path/to/your/light/control/weights \
+    --light_regress_path /path/to/your/light/regress/weights \
+    --custom_data_path /path/to/your/custom/data \
+    --output_dir /path/to/save/outpainted/images \  # Change this to your desired path
+    --left_outpaint 64 \
+    --right_outpaint 64 \
+    --up_outpaint 64 \
+    --down_outpaint 64 \
+    --remove_flare \  # add this flag to remove flare, if you don't want to remove flare at the same time, just omit this line
+    --SIFR_model flare7k++ \
+    --SIFR_model_path /path/to/the/SIFR/model/pretrained/weights
+```
 
 ## Citation
 ```
 @InProceedings{,
-  author    = {},
-  title     = {},
-  booktitle = {},
-  month     = {},
-  year      = {},
-  pages     = {}
+  title     = {LightsOut: Diffusion-based Outpainting for Enhanced Lens Flare Removal},
+  author    = {Tsai, Shr-Ruei and Chang, Wei-Cheng and Lee, Jie-Ying and Su, Chih-Hai and Liu, Yu-Lun},
+  booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision},
+  year      = {2025},
 }
 ```
 

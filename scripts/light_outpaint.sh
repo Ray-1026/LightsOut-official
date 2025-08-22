@@ -2,7 +2,7 @@ export CUDA_VISIBLE_DEVICES=1
 
 export MODEL_DIR="stabilityai/stable-diffusion-2-inpainting"
 # export MODEL_DIR="stable-diffusion-v1-5/stable-diffusion-inpainting"
-export OUTPUT_DIR="weights/light_outpaint"
+export OUTPUT_DIR="weights/light_outpaint_lora"
 
 accelerate launch --num_processes 1 train_light_outpaint.py \
   --pretrained_model_name_or_path=$MODEL_DIR \

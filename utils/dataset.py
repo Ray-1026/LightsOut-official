@@ -1154,6 +1154,90 @@ class TestImageLoader(Dataset):
         return np.clip(matched_noise, 0.0, 1.0)
 
 
+class CustomImageLoader(Dataset):
+    def __init__(
+        self, dataroot_input, left_outpaint, right_outpaint, up_outpaint, down_outpaint
+    ):
+        self.dataroot_input = dataroot_input
+        self.left_outpaint = left_outpaint
+        self.right_outpaint = right_outpaint
+        self.up_outpaint = up_outpaint
+        self.down_outpaint = down_outpaint
+
+        self.H = 512 - (up_outpaint + down_outpaint)
+        self.W = 512 - (left_outpaint + right_outpaint)
+        self.img_size = 512
+
+        self.img_lists = [
+            os.path.join(dataroot_input, f)
+            for f in os.listdir(dataroot_input)
+            if f.endswith(".png") or f.endswith(".jpg")
+        ]
+
+    def __len__(self):
+        return len(self.img_lists)
+
+    def __getitem__(self, index):
+        img_name = self.img_lists[index].split("/")[-1]
+
+        # crop region
+        box = [
+            self.left_outpaint,
+            511 - self.right_outpaint,
+            self.up_outpaint,
+            511 - self.down_outpaint,
+        ]  # [left, right, top, bottom]
+
+        # box = self.lightsource_crop(light_mask)
+        # if box[0] - self.margin >= 0:
+        #     box[0] -= self.margin
+        # if box[1] + self.margin < self.img_size:
+        #     box[1] += self.margin
+        # if box[2] - self.margin >= 0:
+        #     box[2] -= self.margin
+        # if box[3] + self.margin < self.img_size:
+        #     box[3] += self.margin
+
+        # input image to be outpainted
+        input_img = np.zeros((self.img_size, self.img_size, 3), dtype=np.uint8)
+        paste_img = np.array(
+            Image.open(self.img_lists[index]).resize((self.W, self.H), Image.LANCZOS)
+        )
+        input_img[box[2] : box[3] + 1, box[0] : box[1] + 1, :] = paste_img
+        cropped_region = np.ones((self.img_size, self.img_size), dtype=np.uint8)
+        cropped_region[box[2] : box[3] + 1, box[0] : box[1] + 1] = 0
+        input_img[cropped_region == 1] = 128
+
+        # image for blip
+        blip_img = np.array(Image.open(self.img_lists[index]))
+
+        # # noise matching
+        # input_img_matching = None
+        # if self.noise_matching:
+        #     np_src_img = input_img / 255.0
+        #     np_mask_rgb = np.repeat(cropped_region[:, :, None], 3, axis=2).astype(
+        #         np.float32
+        #     )
+        #     matched_noise = self.get_matched_noise(np_src_img, np_mask_rgb)
+        #     input_img_matching = (matched_noise * 255).astype(np.uint8)
+
+        # mask image
+        mask_img = (cropped_region * 255).astype(np.uint8)
+
+        return {
+            "blip_img": blip_img,
+            "input_img": Image.fromarray(input_img),
+            # "input_img": (
+            #     Image.fromarray(input_img_matching)
+            #     if input_img_matching is not None
+            #     else Image.fromarray(input_img)
+            # ),
+            "mask_img": Image.fromarray(mask_img),
+            "box": box,
+            "output_name": img_name,
+        }
+
+
 if __name__ == "__main__":
     config_path = "configs/flare7kpp_dataset.yml"
     with open(config_path, "r") as stream:

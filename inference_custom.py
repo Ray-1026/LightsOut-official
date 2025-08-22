@@ -3,20 +3,27 @@ import numpy as np
 import cv2
 import os
 import torch
-import yaml
 import torchvision
 from PIL import Image, ImageFilter
 from tqdm import tqdm
 from diffusers import ControlNetModel, DPMSolverMultistepScheduler
-from transformers import AutoProcessor, Blip2ForConditionalGeneration
+from transformers import Blip2Processor, Blip2ForConditionalGeneration
 
 from src.pipelines.pipeline_stable_diffusion_outpaint import OutpaintPipeline
 from src.pipelines.pipeline_controlnet_outpaint import ControlNetOutpaintPipeline
 from src.schedulers.scheduling_pndm import CustomScheduler
 from src.models.unet import U_Net
 from src.models.light_source_regressor import LightSourceRegressor
-from utils.dataset import TestImageLoader
-from utils.utils import IoU, mean_IoU
+from utils.dataset import CustomImageLoader
+from utils.utils import (
+    blend_with_alpha,
+    load_mfdnet_checkpoint,
+    predict_flare_from_6_channel,
+    predict_flare_from_3_channel,
+    blend_light_source,
+)
+from SIFR_models.flare7kpp.model import Uformer
+from SIFR_models.mfdnet.model import Model
 
 
 def parse_args():
@@ -28,28 +35,28 @@ def parse_args():
         help="Path to pretrained model or model identifier from huggingface.co/models.",
     )
     parser.add_argument(
+        "--blip2_path",
+        type=str,
+        default="Salesforce/blip2-opt-2.7b",
+        help="Path to pretrained blip2 model or model identifier from huggingface.co/models.",
+    )
+    parser.add_argument(
         "--light_regress_path",
         type=str,
-        default="pretrained/light_regress/model.pth",
+        default="./pretrained/light_regress/model.pth",
         help="Path to pretrained light regress model.",
     )
     parser.add_argument(
         "--light_control_path",
         type=str,
-        default="pretrained/light_control",
+        default="./pretrained/light_control",
         help="Path to pretrained controlnet model or model identifier from huggingface.co/models.",
     )
     parser.add_argument(
         "--light_outpaint_path",
         type=str,
-        default="pretrained/lora_sd",
+        default="./pretrained/light_outpaint_lora",
         help="Path to lora model.",
-    )
-    parser.add_argument(
-        "--blip2_path",
-        type=str,
-        default="Salesforce/blip2-opt-2.7b",
-        help="Path to pretrained blip2 model or model identifier from huggingface.co/models.",
     )
     parser.add_argument(
         "--output_dir",
@@ -57,21 +64,21 @@ def parse_args():
         default="res",
         help="The output directory where predictions are saved",
     )
-    parser.add_argument(
-        "--dataset_config",
-        type=str,
-        default="configs/flare7kpp_dataset.yml",
-        help="Path to dataset configuration file.",
-    )
+    # parser.add_argument(
+    #     "--dataset_config",
+    #     type=str,
+    #     default="configs/flare7kpp_dataset.yml",
+    #     help="Path to dataset configuration file.",
+    # )
     parser.add_argument(
         "--seed", type=int, default=42, help="A seed for reproducible inference."
     )
-    parser.add_argument(
-        "--light_setting",
-        choices=["incomplete", "no"],
-        default="no",
-        help="Light setting for the model.",
-    )
+    # parser.add_argument(
+    #     "--light_setting",
+    #     choices=["incomplete", "no"],
+    #     default="no",
+    #     help="Light setting for the model.",
+    # )
     parser.add_argument(
         "--step", type=int, default=50, help="Number of denoising steps."
     )
@@ -94,13 +101,60 @@ def parse_args():
         help="Additional prompt for the model.",
     )
 
+    # add for custom data inference
+    parser.add_argument(
+        "--custom_data_path",
+        type=str,
+        default="custom_data",
+        help="Path to custom data for inference.",
+    )
+    parser.add_argument(
+        "--left_outpaint",
+        type=int,
+        default=64,
+        help="Left outpaint size for custom data (suggest no more than 128).",
+    )
+    parser.add_argument(
+        "--right_outpaint",
+        type=int,
+        default=64,
+        help="Right outpaint size for custom data (suggest no more than 128).",
+    )
+    parser.add_argument(
+        "--up_outpaint",
+        type=int,
+        default=64,
+        help="Up outpaint size for custom data (suggest no more than 128).",
+    )
+    parser.add_argument(
+        "--down_outpaint",
+        type=int,
+        default=64,
+        help="Down outpaint size for custom data (suggest no more than 128).",
+    )
+
+    # flare removal
+    parser.add_argument(
+        "--remove_flare", action="store_true", help="Remove flare from images."
+    )
+    parser.add_argument(
+        "--SIFR_model",
+        type=str,
+        choices=["flare7k++", "mfdnet"],
+        default=None,
+        help="Select the SIFR model to use.",
+    )
+    parser.add_argument(
+        "--SIFR_model_path", type=str, default=None, help="Path to the SIFR model."
+    )
+
     args = parser.parse_args()
 
-    # set margin
-    if args.light_setting == "incomplete":
-        args.margin = 15
-    else:
-        args.margin = 0
+    if args.remove_flare:
+        if args.SIFR_model is None or args.SIFR_model_path is None:
+            raise ValueError(
+                "SIFR model and model path must be specified when removing flare."
+            )
 
     return args
 
@@ -141,42 +195,32 @@ def OutpainterInit(
 
 
 def Blip2Init(blip2_path, device="cuda", torch_dtype=torch.float16):
-    processor = AutoProcessor.from_pretrained(blip2_path)
+    processor = Blip2Processor.from_pretrained(
+        blip2_path, revision="51572668da0eb669e01a189dc22abe6088589a24"
+    )
     blip2 = Blip2ForConditionalGeneration.from_pretrained(
-        blip2_path, torch_dtype=torch_dtype
+        blip2_path,
+        torch_dtype=torch_dtype,
+        revision="51572668da0eb669e01a189dc22abe6088589a24",
     )
     blip2 = blip2.to(device)
     return processor, blip2
 
 
-def blend_with_alpha(result, input_img, box, blur_size=31):
-    """
-    Apply alpha blending to paste the specified box region from input_img onto the result image
-    to reduce boundary artifacts and make the blending more natural.
+def build_SIFR_model(SIFR_model, SIFR_model_path, device="cuda"):
+    if SIFR_model == "flare7k++":
+        model = Uformer(img_size=512, img_ch=3, output_ch=6).to(device)
+        model.load_state_dict(torch.load(SIFR_model_path))
+    elif SIFR_model == "mfdnet":
+        model = Model().to(device)
+        load_mfdnet_checkpoint(model, SIFR_model_path)
 
-    Args:
-        result (np.array): inpainting generated image
-        input_img (np.array): original image
-        box (tuple): (x_min, x_max, y_min, y_max) representing the paste-back region from the original image
-        blur_size (int): blur range for the mask, larger values create smoother transitions (recommended 15~50)
+    model.eval()
+    return model
 
-    Returns:
-        np.array: image after alpha blending
-    """
 
-    x_min, x_max, y_min, y_max = box
-
-    # alpha mask
-    mask = np.zeros_like(result, dtype=np.float32)
-    mask[y_min : y_max + 1, x_min : x_max + 1] = 1.0
-
-    # gaussian blur
-    mask = cv2.GaussianBlur(mask, (blur_size, blur_size), 0)
-
-    # alpha blending
-    blended = (mask * input_img + (1 - mask) * result).astype(np.uint8)
-
-    return blended
+def collate_fn(batch):
+    return batch[0]
 
 
 def main(args):
@@ -186,20 +230,28 @@ def main(args):
     lsr_module = LSRMInit(args.light_regress_path)
 
     # sd outpaint
-    pipe = OutpainterInit(args.sd_path, args.controlnet_path, args.light_outpaint_path)
+    pipe = OutpainterInit(
+        args.sd_path, args.light_control_path, args.light_outpaint_path
+    )
 
     # blip2
     processor, blip2 = Blip2Init(args.blip2_path)
 
-    # dataset
-    with open(args.dataset_config, "r") as stream:
-        config = yaml.safe_load(stream)
-
-    dataset = TestImageLoader(
-        config["testing_dataset"]["dataroot_gt"],
-        config["testing_dataset"]["dataroot_lq"],
-        config["testing_dataset"]["dataroot_mask"],
-        margin=args.margin,  # 0 or 15
+    # custom dataset
+    dataset = CustomImageLoader(
+        args.custom_data_path,
+        left_outpaint=args.left_outpaint,
+        right_outpaint=args.right_outpaint,
+        up_outpaint=args.up_outpaint,
+        down_outpaint=args.down_outpaint,
+    )
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=1,
+        shuffle=False,
+        num_workers=1,
+        pin_memory=True,
+        collate_fn=collate_fn,
     )
 
     # generator
@@ -214,27 +266,22 @@ def main(args):
     )
 
     threshold = 0.5
+    result_paths = []
+    result_boxes = []
     # iou_scores = []
 
     for data in tqdm(dataset):
+        # for data in tqdm(dataloader):
         with torch.no_grad():
             input_img = data["input_img"]
-            control_img = data["control_img"]
 
             input_img = transform(input_img).unsqueeze(0).to("cuda")
-            control_img = transform(control_img).unsqueeze(0)
 
             pred_mask = lsr_module.forward_render(input_img)
 
             pred_mask = (pred_mask > threshold).float()
 
             pred_mask = pred_mask.cpu().numpy()
-            control_img = (control_img.numpy() + 1) / 2
-
-            ## iou score
-            # iou_score = mean_IoU(control_img[0, 0], pred_mask[0, 0], 2)
-            # iou_score = IoU(pred_mask[0, 0], control_img[0, 0])
-            # iou_scores.append(iou_score)
 
             data["control_img"] = Image.fromarray(
                 (pred_mask[0, 0] * 255).astype(np.uint8)
@@ -264,10 +311,10 @@ def main(args):
         result = pipe(
             prompt=generated_text,
             # negative_prompt="NSFW, (word:1.5), watermark, blurry, missing body, amputation, mutilation",
-            image=data["input_img_matching"],
+            image=data["input_img"],
             mask_image=data["mask_img"],
             control_image=(
-                data["control_img"] if args.controlnet_path is not None else None
+                data["control_img"] if args.light_control_path is not None else None
             ),
             num_inference_steps=args.step,
             guidance_scale=args.cfg_scale,
@@ -290,6 +337,56 @@ def main(args):
 
         result = Image.fromarray(result.astype(np.uint8))
         result.save(f"{args.output_dir}/{output_name}")
+
+        result_paths.append(f"{args.output_dir}/{output_name}")
+        result_boxes.append(box)
+
+    if args.remove_flare:
+        deflare_path = f"{args.output_dir}/deflare_res"
+        crop_path = f"{args.output_dir}/deflare_crop"
+        os.makedirs(deflare_path, exist_ok=True)
+        os.makedirs(crop_path, exist_ok=True)
+
+        sifr_model = build_SIFR_model(args.SIFR_model, args.SIFR_model_path)
+
+        sifr_transform = torchvision.transforms.Compose(
+            [
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Resize((512, 512)),
+            ]
+        )
+
+        for p, box in tqdm(zip(result_paths, result_boxes)):
+            img = Image.open(p).convert("RGB")
+            img = sifr_transform(img).unsqueeze(0).cuda()
+
+            with torch.no_grad():
+                output_img = sifr_model(img)
+
+                gamma = torch.Tensor([2.2])
+
+                if args.SIFR_model == "flare7k++":
+                    deflare_img, _, _ = predict_flare_from_6_channel(output_img, gamma)
+                    torchvision.utils.save_image(
+                        deflare_img, f"{deflare_path}/{os.path.basename(p)}"
+                    )
+                elif args.SIFR_model == "mfdnet":
+                    flare_mask = torch.zeros_like(img)
+                    deflare_img, _ = predict_flare_from_3_channel(
+                        output_img, flare_mask, output_img, img, img, gamma
+                    )
+                    deflare_img = blend_light_source(img, deflare_img, 0.999)
+                    torchvision.utils.save_image(
+                        deflare_img, f"{deflare_path}/{os.path.basename(p)}"
+                    )
+
+            crop_img = deflare_img.cpu().squeeze(0).permute(1, 2, 0).numpy()
+            crop_img = np.clip(crop_img, 0.0, 1.0)
+            crop_img = (crop_img * 255).astype(np.uint8)
+            crop_img = crop_img[box[2] : box[3] + 1, box[0] : box[1] + 1, :]
+            Image.fromarray(crop_img).resize((512, 512), Image.LANCZOS).save(
+                f"{crop_path}/{os.path.basename(p)}"
+            )
 
 
 if __name__ == "__main__":
