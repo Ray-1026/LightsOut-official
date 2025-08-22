@@ -20,6 +20,67 @@ pip install -r requirements.txt
 ## Dataset Preparation
 1. Download the Flare7K++ dataset from [Flare7K](https://github.com/ykdai/Flare7K).
 2. Unzip the dataset and place it in the `data/` directory.
+3. Modify the `configs/flare7kpp_dataset.yml` file to set the correct paths for the dataset.
+
+## Inference
+Our inference script also provides the option to remove flare. You can go to the repositories [Flare7K](https://github.com/ykdai/Flare7K) or [MFDNet](https://github.com/Jiang-maomao/flare-removal) to download the pretrained models. Then, you can add the following arguments to the inference script:
+
+```bash
+--remove_flare \
+--SIFR_model flare7k++ \
+--SIFR_model_path /path/to/the/SIFR/model/pretrained/weights
+```
+
+Alternatively, you can directly use the provided script in the `scripts/` folder. Just modify the options within the script as needed:
+```bash
+bash scripts/inference.sh
+```
+
+## Evaluation
+After running inference on the Flare7k++ test set, a folder will be generated containing the outpainted images. The structure of the folder will look like this:
+
+```
+/path/to/your/output/dir
+|── deflare_crop/ # Cropped images with flare removed
+|   ├── xxx.png
+|   └── ...
+|
+|── deflare_res/ # Full images with flare removed (for evaluation)
+|   ├── xxx.png
+|   └── ...
+|
+|── xxx.png
+|── ...
+```
+
+Evaluate your results using the provided evaluation script:
+
+```bash
+python evaluate.py \
+    --input /path/to/your/flare/removal/results/in/`deflare_res` \
+    --gt /path/to/flare7kpp/test/gt \
+    --mask /path/to/flare7kpp/test/mask \
+    --crop_margin 0 # 0 => no light source, 15 => incomplete light source
+```
+
+## Inference on Custom Data
+To run inference on your own images, you can use the `inference_custom.py` script.
+
+```bash
+python inference.py \
+    --light_outpaint_path /path/to/your/light/outpaint/weights \
+    --light_control_path /path/to/your/light/control/weights \
+    --light_regress_path /path/to/your/light/regress/weights \
+    --custom_data_path /path/to/your/custom/data \
+    --output_dir /path/to/save/outpainted/images \  # Change this to your desired path
+    --left_outpaint 64 \
+    --right_outpaint 64 \
+    --up_outpaint 64 \
+    --down_outpaint 64 \
+    --remove_flare \  # add this flag to remove flare, if you don't want to remove flare at the same time, just omit this line
+    --SIFR_model flare7k++ \
+    --SIFR_model_path /path/to/the/SIFR/model/pretrained/weights
+```
 
 ## Training
 All components of the pipeline are trained separately:
@@ -101,69 +162,9 @@ All components of the pipeline are trained separately:
   bash scripts/lora_outpaint.sh
   ```
 
-## Inference
-Our inference script also provides the option to remove flare. You can go to the repositories [Flare7K](https://github.com/ykdai/Flare7K) or [MFDNet](https://github.com/Jiang-maomao/flare-removal) to download the pretrained models. Then, you can add the following arguments to the inference script:
-
-```bash
---remove_flare \
---SIFR_model flare7k++ \
---SIFR_model_path /path/to/the/SIFR/model/pretrained/weights
-```
-
-Alternatively, you can directly use the provided script in the `scripts/` folder. Just modify the options within the script as needed:
-```bash
-bash scripts/inference.sh
-```
-
-## Evaluation
-After running inference on the Flare7k++ test set, a folder will be generated containing the outpainted images. The structure of the folder will look like this:
-
-```
-/path/to/your/output/dir
-|── deflare_crop/ # Cropped images with flare removed
-|   ├── xxx.png
-|   └── ...
-|
-|── deflare_res/ # Full images with flare removed (for evaluation)
-|   ├── xxx.png
-|   └── ...
-|
-|── xxx.png
-|── ...
-```
-
-Evaluate your results using the provided evaluation script:
-
-```bash
-python evaluate.py \
-    --input /path/to/your/flare/removal/results/in/`deflare_res` \
-    --gt /path/to/flare7kpp/test/gt \
-    --mask /path/to/flare7kpp/test/mask \
-    --crop_margin 0 # 0 => no light source, 15 => incomplete light source
-```
-
-## Inference on Custom Data
-To run inference on your own images, you can use the `inference_custom.py` script.
-
-```bash
-python inference.py \
-    --light_outpaint_path /path/to/your/light/outpaint/weights \
-    --light_control_path /path/to/your/light/control/weights \
-    --light_regress_path /path/to/your/light/regress/weights \
-    --custom_data_path /path/to/your/custom/data \
-    --output_dir /path/to/save/outpainted/images \  # Change this to your desired path
-    --left_outpaint 64 \
-    --right_outpaint 64 \
-    --up_outpaint 64 \
-    --down_outpaint 64 \
-    --remove_flare \  # add this flag to remove flare, if you don't want to remove flare at the same time, just omit this line
-    --SIFR_model flare7k++ \
-    --SIFR_model_path /path/to/the/SIFR/model/pretrained/weights
-```
-
 ## Citation
 ```
-@InProceedings{,
+@InProceedings{tsai2025lightsout,
   title     = {LightsOut: Diffusion-based Outpainting for Enhanced Lens Flare Removal},
   author    = {Tsai, Shr-Ruei and Chang, Wei-Cheng and Lee, Jie-Ying and Su, Chih-Hai and Liu, Yu-Lun},
   booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision},
