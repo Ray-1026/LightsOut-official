@@ -1,4 +1,4 @@
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 
 export MODEL_DIR="stabilityai/stable-diffusion-2-1-base"
 # export MODEL_DIR="stable-diffusion-v1-5/stable-diffusion-v1-5"

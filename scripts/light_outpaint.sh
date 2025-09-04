@@ -1,4 +1,4 @@
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 
 export MODEL_DIR="stabilityai/stable-diffusion-2-inpainting"
 # export MODEL_DIR="stable-diffusion-v1-5/stable-diffusion-inpainting"
@@ -20,4 +20,4 @@ accelerate launch --num_processes 1 train_light_outpaint.py \
   --enable_xformers_memory_efficient_attention \
   --gradient_checkpointing \
   --dataloader_num_workers=8 \
-  --max_train_steps=25000
+  --max_train_steps=10

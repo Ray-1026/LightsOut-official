@@ -2,7 +2,7 @@
 
 # LightsOut: Diffusion-based Outpainting for Enhanced Lens Flare Removal
 
-[Shr-Ruei Tsai](), [Wei-Cheng Chang](), [Jie-Ying Lee](https://jayinnn.dev/), [Chih-Hai Su](https://su-terry.github.io/), [Yu-Lun Liu](https://yulunalexliu.github.io/)
+[Shr-Ruei Tsai](https://ray-1026.github.io/), [Wei-Cheng Chang](), [Jie-Ying Lee](https://jayinnn.dev/), [Chih-Hai Su](https://su-terry.github.io/), [Yu-Lun Liu](https://yulunalexliu.github.io/)
 
 National Yang Ming Chaio Tung University
 
@@ -67,7 +67,7 @@ python evaluate.py \
 To run inference on your own images, you can use the `inference_custom.py` script.
 
 ```bash
-python inference.py \
+python inference_custom.py \
     --light_outpaint_path /path/to/your/light/outpaint/weights \
     --light_control_path /path/to/your/light/control/weights \
     --light_regress_path /path/to/your/light/regress/weights \

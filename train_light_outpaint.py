@@ -24,7 +24,6 @@ import json
 from pathlib import Path
 from PIL import Image
 import torchvision
-import datasets
 import yaml
 import numpy as np
 import torch
@@ -35,8 +34,6 @@ import diffusers
 from accelerate import Accelerator
 from accelerate.logging import get_logger
 from accelerate.utils import ProjectConfiguration, set_seed
-
-from datasets import load_dataset
 from packaging import version
 from torchvision import transforms
 from tqdm.auto import tqdm
