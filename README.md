@@ -1,6 +1,6 @@
 <img src="https://ray-1026.github.io/lightsout/static/images/favicon_new.svg" height="100px" align="right">
 
-# LightsOut: Diffusion-based Outpainting for Enhanced Lens Flare Removal
+# [ICCV 2025] LightsOut: Diffusion-based Outpainting for Enhanced Lens Flare Removal
 
 [Shr-Ruei Tsai](https://ray-1026.github.io/), [Wei-Cheng Chang](), [Jie-Ying Lee](https://jayinnn.dev/), [Chih-Hai Su](https://su-terry.github.io/), [Yu-Lun Liu](https://yulunalexliu.github.io/)
 
