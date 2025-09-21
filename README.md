@@ -161,7 +161,7 @@ All components of the pipeline are trained separately:
   ```
 
 ## Citation
-```
+```bibtex
 @InProceedings{tsai2025lightsout,
   title     = {LightsOut: Diffusion-based Outpainting for Enhanced Lens Flare Removal},
   author    = {Tsai, Shr-Ruei and Chang, Wei-Cheng and Lee, Jie-Ying and Su, Chih-Hai and Liu, Yu-Lun},
