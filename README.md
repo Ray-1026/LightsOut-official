@@ -58,6 +58,7 @@ python evaluate.py \
     --input /path/to/your/flare/removal/results/in/`deflare_res` \
     --gt /path/to/flare7kpp/test/gt \
     --mask /path/to/flare7kpp/test/mask \
+    --crop \ # if your input have not been cropped yet
     --crop_margin 0 # 0 => no light source, 15 => incomplete light source
 ```
 
@@ -163,10 +164,12 @@ All components of the pipeline are trained separately:
 ## Citation
 ```bibtex
 @InProceedings{tsai2025lightsout,
-  title     = {LightsOut: Diffusion-based Outpainting for Enhanced Lens Flare Removal},
-  author    = {Tsai, Shr-Ruei and Chang, Wei-Cheng and Lee, Jie-Ying and Su, Chih-Hai and Liu, Yu-Lun},
-  booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision},
-  year      = {2025},
+    author    = {Tsai, Shr-Ruei and Chang, Wei-Cheng and Lee, Jie-Ying and Su, Chih-Hai and Liu, Yu-Lun},
+    title     = {LightsOut: Diffusion-based Outpainting for Enhanced Lens Flare Removal},
+    booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
+    month     = {October},
+    year      = {2025},
+    pages     = {6353-6363}
 }
 ```
 

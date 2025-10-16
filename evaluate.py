@@ -153,11 +153,9 @@ def calculate_metrics(args):
             res[3] += margin
         left, right, top, bottom = res[0], res[1], res[2], res[3]
 
-        name = args["name"]
-
         img_gt = img_gt[top : bottom + 1, left : right + 1]
 
-        if name != "baseline":  # baseline does not crop
+        if args["crop"]:
             img_input = img_input[top : bottom + 1, left : right + 1]
 
         size = 512
@@ -168,18 +166,13 @@ def calculate_metrics(args):
             Image.fromarray(img_input).resize((size, size), Image.LANCZOS)
         )
 
-        # if name != "baseline":  # only save cropped images for non-baseline methods
-        #     os.makedirs(args["crop"], exist_ok=True)
-        #     Image.fromarray(img_input).save(f"{args["crop"]}/{i:06d}.png")
-
         ssim += [compare_ssim(img_gt, img_input, multichannel=True, channel_axis=2)]
         psnr += [compare_psnr(img_gt, img_input, data_range=255)]
         lpips_val += [compare_lpips(img_gt, img_input, loss_fn_alex)]
         if args["mask"] is not None:
             img_seg = io.imread(mask_list[i])
 
-            if name != "baseline":  # baseline does not crop
-                img_seg = img_seg[top : bottom + 1, left : right + 1]
+            img_seg = img_seg[top : bottom + 1, left : right + 1]
 
             img_seg = np.array(
                 Image.fromarray(img_seg).resize((size, size), Image.LANCZOS)
@@ -214,8 +207,7 @@ if __name__ == "__main__":
     parser.add_argument("--input", type=str, default=None)
     parser.add_argument("--gt", type=str, default=None)
     parser.add_argument("--mask", type=str, default=None)
-    parser.add_argument("--crop", type=str, default=None)
+    parser.add_argument("--crop", action="store_true")
     parser.add_argument("--crop_margin", type=int, default=0)
-    parser.add_argument("--name", type=str, default="lightsout", choices=["lightsout", "baseline"])
     args = vars(parser.parse_args())
     calculate_metrics(args)

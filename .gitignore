@@ -210,4 +210,5 @@ __marimo__/
 pretrained/
 weights/
 res/
+data/
 custom_data/
