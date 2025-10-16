@@ -1,6 +1,6 @@
 # [ICCV 2025] LightsOut: Diffusion-based Outpainting for Enhanced Lens Flare Removal
 
-[Shr-Ruei Tsai](https://www.linkedin.com/in/shr-ruei-tsai/), [Wei-Cheng Chang](https://openreview.net/profile?id=~Wei-Cheng_Chang3/), [Jie-Ying Lee](https://jayinnn.dev/), [Chih-Hai Su](https://su-terry.github.io/), [Yu-Lun Liu](https://yulunalexliu.github.io/)
+[Shr-Ruei Tsai](https://tw.linkedin.com/in/shr-ruei-tsai/en), [Wei-Cheng Chang](https://openreview.net/profile?id=~Wei-Cheng_Chang3), [Jie-Ying Lee](https://jayinnn.dev/), [Chih-Hai Su](https://su-terry.github.io/), [Yu-Lun Liu](https://yulunalexliu.github.io/)
 
 National Yang Ming Chaio Tung University
 
