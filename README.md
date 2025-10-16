@@ -1,6 +1,6 @@
 # [ICCV 2025] LightsOut: Diffusion-based Outpainting for Enhanced Lens Flare Removal
 
-[Shr-Ruei Tsai](https://ray-1026.github.io/), [Wei-Cheng Chang](), [Jie-Ying Lee](https://jayinnn.dev/), [Chih-Hai Su](https://su-terry.github.io/), [Yu-Lun Liu](https://yulunalexliu.github.io/)
+[Shr-Ruei Tsai](https://www.linkedin.com/in/shr-ruei-tsai/), [Wei-Cheng Chang](https://openreview.net/profile?id=~Wei-Cheng_Chang3/), [Jie-Ying Lee](https://jayinnn.dev/), [Chih-Hai Su](https://su-terry.github.io/), [Yu-Lun Liu](https://yulunalexliu.github.io/)
 
 National Yang Ming Chaio Tung University
 
@@ -47,15 +47,16 @@ After running inference on the Flare7k++ test set, a folder will be generated co
 |   ├── xxx.png
 |   └── ...
 |
-|── xxx.png
-|── ...
+|── Outpainted/ # Outpainted images
+|   ├── xxx.png
+|   └── ...
 ```
 
 Evaluate your results using the provided evaluation script:
 
 ```bash
 python evaluate.py \
-    --input /path/to/your/flare/removal/results/in/`deflare_res` \
+    --input /path/to/your/flare/removal/results \
     --gt /path/to/flare7kpp/test/gt \
     --mask /path/to/flare7kpp/test/mask \
     --crop \ # if your input have not been cropped yet

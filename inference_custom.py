@@ -225,6 +225,7 @@ def collate_fn(batch):
 
 def main(args):
     os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(f"{args.output_dir}/outpainted", exist_ok=True)
 
     # lightsource regress model
     lsr_module = LSRMInit(args.light_regress_path)
@@ -336,9 +337,9 @@ def main(args):
         result = blend_with_alpha(result, input_img2, box, blur_size=31)
 
         result = Image.fromarray(result.astype(np.uint8))
-        result.save(f"{args.output_dir}/{output_name}")
+        result.save(f"{args.output_dir}/outpainted/{output_name}")
 
-        result_paths.append(f"{args.output_dir}/{output_name}")
+        result_paths.append(f"{args.output_dir}/outpainted/{output_name}")
         result_boxes.append(box)
 
     if args.remove_flare:
