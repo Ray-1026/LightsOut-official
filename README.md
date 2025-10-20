@@ -4,7 +4,9 @@
 
 National Yang Ming Chaio Tung University
 
-<!-- [![arXiv](https://img.shields.io/badge/)](https://arxiv.org/) -->
+[![arXiv](https://img.shields.io/badge/arXiv-2510.15868-b31b1b)](https://arxiv.org/abs/2510.15868)
+[![Static Badge](https://img.shields.io/badge/Project_Page-LightsOut-green)](https://ray-1026.github.io/lightsout/)
+[![Static Badge](https://img.shields.io/badge/%F0%9F%A4%97-Hugging%20Face-orange)](https://huggingface.co/papers/2510.15868)
 
 ![Teaser](./assets/teaser.png)
 
