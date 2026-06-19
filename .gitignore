@@ -212,3 +212,4 @@ weights/
 res/
 data/
 custom_data/
+.DS_Store

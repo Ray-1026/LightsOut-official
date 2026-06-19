@@ -22,6 +22,9 @@ pip install -r requirements.txt
 2. Unzip the dataset and place it in the `data/` directory.
 3. Modify the `configs/flare7kpp_dataset.yml` file to set the correct paths for the dataset.
 
+## Pretrained Weights
+You can download our pretrained weights from [Google Drive](https://drive.google.com/file/d/1Bn3TOZyZa5HgD5cV2p63pPgveUuoerK3/view?usp=sharing).
+
 ## Inference
 Our inference script also provides the option to remove flare. You can go to the repositories [Flare7K](https://github.com/ykdai/Flare7K) or [MFDNet](https://github.com/Jiang-maomao/flare-removal) to download the pretrained models. Then, you can add the following arguments to the inference script:
 
